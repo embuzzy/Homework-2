@@ -26,20 +26,92 @@ Problem 2 - Author Attribution
 
 #### First I pulled all of the text out of the list of documents & created a corpus for the training data
 
-    ## Warning in tm_map.SimpleCorpus(my_corpus, content_transformer(tolower)):
-    ## transformation drops documents
+    library(tm)
 
-    ## Warning in tm_map.SimpleCorpus(my_corpus,
-    ## content_transformer(removeNumbers)): transformation drops documents
+    #Wrapper function
+    readerPlain = function(fname){
+      readPlain(elem=list(content=readLines(fname)), 
+                id=fname, language='en') }
 
-    ## Warning in tm_map.SimpleCorpus(my_corpus,
-    ## content_transformer(removePunctuation)): transformation drops documents
 
-    ## Warning in tm_map.SimpleCorpus(my_corpus,
-    ## content_transformer(stripWhitespace)): transformation drops documents
 
-    ## Warning in tm_map.SimpleCorpus(my_corpus,
-    ## content_transformer(removeWords), : transformation drops documents
+    author_dirs_train = Sys.glob('~/ReutersC50/C50train/*')
+    author_dirs_test = Sys.glob('~/ReutersC50/C50test/*')
+
+    file_list_train = NULL
+    labels = NULL
+    for(author in author_dirs_train) 
+    {
+      author_name = substring(author, first = 29)
+      files_to_add = Sys.glob(paste0(author, '/*.txt'))
+      file_list_train = append(file_list_train, files_to_add)
+      labels = append(labels, rep(author_name, length(files_to_add)))
+    }
+
+    #Getting rid of '.txt' from filename
+    all_docs_train = lapply(file_list_train, readerPlain) 
+    names(all_docs_train) = file_list_train
+    names(all_docs_train) = sub('.txt', '', names(all_docs_train))
+
+
+
+    file_list_test = NULL
+    labels = NULL
+    for(author in author_dirs_test) 
+    {
+      author_name = substring(author, first = 29)
+      files_to_add = Sys.glob(paste0(author, '/*.txt'))
+      file_list_test = append(file_list_test, files_to_add)
+      labels = append(labels, rep(author_name, length(files_to_add)))
+    }
+
+    #Getting rid of '.txt' from filename
+    all_docs_test = lapply(file_list_test, readerPlain) 
+    names(all_docs_test) = file_list_test
+    names(all_docs_test) = sub('.txt', '', names(all_docs_test))
+
+    my_corpus = Corpus(VectorSource(all_docs_train))
+    test_corpus = Corpus(VectorSource(all_docs_test))
+
+
+    my_corpus = tm_map(my_corpus, content_transformer(tolower)) # make everything lowercase
+    my_corpus = tm_map(my_corpus, content_transformer(removeNumbers)) # remove numbers
+    my_corpus = tm_map(my_corpus, content_transformer(removePunctuation)) # remove punctuation
+    my_corpus = tm_map(my_corpus, content_transformer(stripWhitespace)) ## remove excess white-space
+    my_corpus = tm_map(my_corpus, content_transformer(removeWords), stopwords("SMART"))
+
+
+    test_corpus = tm_map(test_corpus, content_transformer(tolower)) # make everything lowercase
+    test_corpus = tm_map(test_corpus, content_transformer(removeNumbers)) # remove numbers
+    test_corpus = tm_map(test_corpus, content_transformer(removePunctuation)) # remove punctuation
+    test_corpus = tm_map(test_corpus, content_transformer(stripWhitespace)) ## remove excess white-space
+    test_corpus = tm_map(test_corpus, content_transformer(removeWords), stopwords("SMART"))
+
+
+    DTM_train= DocumentTermMatrix(my_corpus)
+
+    DTM_train = removeSparseTerms(DTM_train, 0.975)
+
+    #use same terms in test and train
+    DTM_test= DocumentTermMatrix(test_corpus,control = list(dictionary=Terms(DTM_train)))
+
+    #change to matrix
+    X = as.matrix(DTM_train)
+
+    #Calculate TDF-IDF Weights
+    N = nrow(X)
+    D = ncol(X)
+    TF_mat = X/rowSums(X)
+    IDF_vec = log(1 + N/colSums(X > 0))
+
+    TFIDF_mat = sweep(TF_mat, MARGIN=2, STATS=IDF_vec, FUN="*")  
+
+    tfidf_test = weightTfIdf(DTM_test)
+    TFIDF_mat_test <- as.data.frame(as.matrix(tfidf_test))
+
+    #Let's use PCA to find the most important components
+    pc2 = prcomp(TFIDF_mat, scale=TRUE)
+    pc_test <- predict(pc2, newdata = TFIDF_mat_test) ##Getting error at this point
 
 Problem 3 - Practice with Association Rule Mining
 -------------------------------------------------
